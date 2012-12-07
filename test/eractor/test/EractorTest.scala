@@ -23,7 +23,7 @@ class EractorTest extends FlatSpec with ShouldMatchers with BeforeAndAfterAll {
 
 		val ref = TestActorRef(new Actor with Eractor{
 
-			def body = {
+			def loop = {
 				state = "ok!"
 			}
 		})
@@ -35,7 +35,7 @@ class EractorTest extends FlatSpec with ShouldMatchers with BeforeAndAfterAll {
 	it should "start eractor and wait for messages" in {
 		val ref = TestActorRef(new Actor with Eractor {
 			var state = 0
-			def body = {
+			def loop = {
 
 				react{
 					case msg:Int =>
@@ -43,7 +43,7 @@ class EractorTest extends FlatSpec with ShouldMatchers with BeforeAndAfterAll {
 						sender ! state
 				}
 
-				body
+				loop
 			}
 		})
 
@@ -57,7 +57,7 @@ class EractorTest extends FlatSpec with ShouldMatchers with BeforeAndAfterAll {
 
 	it should "introduce timeouts" in {
 		val ref = TestActorRef(new Actor with Eractor{
-			def body = {
+			def loop = {
 				var state = "no!"
 
 				// wait for anything after start and if there's nothing change state
@@ -83,7 +83,7 @@ class EractorTest extends FlatSpec with ShouldMatchers with BeforeAndAfterAll {
 	it should "handle zero timeouts" in {
 		val ref = TestActorRef(new Actor with Eractor{
 			var state = "no!"
-			def body = {
+			def loop = {
 				react(Timeout.zero, {
 					case Timeout =>
 						state = "ok!"

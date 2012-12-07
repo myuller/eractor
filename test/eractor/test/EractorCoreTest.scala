@@ -23,9 +23,9 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 		flag should be(right = true)
 	}
 
-	it should "be ready to receive messages if body contains \"react\" functions" in {
+	it should "be ready to receive messages if loop contains \"react\" functions" in {
 		new EractorCore {
-			def body() = {
+			def loop() = {
 				react{ case _ => 0 }
 				()
 			}
@@ -35,7 +35,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 	it should "receive and process messages" in {
 		val core = new EractorCore {
 			var status = 1
-			def body() = {
+			def loop() = {
 				val q = react {
 					case x:Int => status = x
 						status + 19
@@ -55,7 +55,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 
 	it should "queue unmatching messages" in {
 		val core = new EractorCore {
-			def body = {
+			def loop = {
 				react {
 					case 99 =>
 						()
@@ -71,7 +71,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 	it should "unqueue messages previously unmatched after successfull match" in {
 		var state = List.empty[Int]
 		val core = new EractorCore {
-			def body() = {
+			def loop() = {
 				react {
 					case 99 =>
 						state ::=  99
@@ -99,7 +99,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 	it should "time out" in {
 		var expired = false
 		val core = new EractorCore{
-			def body() = {
+			def loop() = {
 				react(5.seconds, {
 					case Expired => expired = true
 					case _ => expired = false
@@ -116,7 +116,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 	it should "recur" in {
 		val core = new EractorCore{
 			var state = ""
-			def body() = {
+			def loop() = {
 				val finished = react{
 					case x:String if state.length < 9 =>
 						state += x
@@ -127,7 +127,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 				}
 
 				if (!finished)
-					body()
+					loop()
 				else
 					shiftUnit
 			}
@@ -147,20 +147,20 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 		val core = new EractorCore{
 			var state = 0L
 
-			def body = {
+			def loop = {
 
 				state -= 1
 
-				loop
+				process
 			}
 
-			def loop: Unit @eractorUnit = {
+			def process: Unit @eractorUnit = {
 				react {
 					case x:Int =>
 						state += x
 				}
 
-				body
+				loop
 			}
 		}
 
@@ -173,7 +173,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 
 	it should "limit maximum amount of messages in queue" in {
 		val core = new EractorCore {
-			def body = {
+			def loop = {
 				val ref = Ref()
 				react{
 					case `ref` => ()
@@ -194,6 +194,6 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 	}
 
 	private def eractor(bBody: => Unit ) = new EractorCore{
-		def body = { bBody }
+		def loop = { bBody }
 	}
 }

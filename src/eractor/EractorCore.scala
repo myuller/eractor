@@ -6,7 +6,7 @@ import akka.util.Timeout
 
 trait EractorCore {
 
-	def body : Any @eractorUnit
+	def loop : Any @eractorUnit
 
 	private val queue = mutable.Buffer.empty[Any]
 	protected val queueMaxSize = 4096
@@ -15,7 +15,7 @@ trait EractorCore {
 
 	def start:EractorState = {
 		state = reset[EractorState, EractorState]{
-			body
+			loop
 			Finished
 		}
 
@@ -45,7 +45,7 @@ trait EractorCore {
 			} else {
 				// construct and return future message handling function with current extractor if no matching message in queue found
 				def handler(message:Any):EractorState = {
-					if (extractor.isDefinedAt(message)) // execute body with received message
+					if (extractor.isDefinedAt(message)) // execute loop with received message
 						k(extractor(message))
 					else { // put message in queue and return same handler again
 						if (queue.length >= queueMaxSize)
