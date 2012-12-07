@@ -1,3 +1,3 @@
-package eractor
+package eractor.test
 
 case object Expired

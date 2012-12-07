@@ -5,6 +5,7 @@ import org.scalatest.FlatSpec
 import eractor._
 import akka.util.duration._
 import akka.util.Timeout
+import util.continuations.cpsParam
 
 class EractorCoreTest extends FlatSpec with ShouldMatchers {
 	behavior of "EractorCore"
@@ -26,7 +27,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 	it should "be ready to receive messages if body contains \"receive\" functions" in {
 		new EractorCore {
 			def body() = {
-				receive{ case _ => 0 }
+				react{ case _ => 0 }
 				()
 			}
 		}.start should beReady
@@ -36,11 +37,11 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 		val core = new EractorCore {
 			var status = 1
 			def body() = {
-				val q = receive {
+				val q = react {
 					case x:Int => status = x
 						status + 19
 				}
-				receive {
+				react {
 					case y:Int => status = y * q
 				}
 			}
@@ -56,7 +57,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 	it should "queue unmatching messages" in {
 		val core = new EractorCore {
 			def body() = {
-				receive {
+				react {
 					case 99 =>
 						()
 				}
@@ -72,15 +73,15 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 		var state = List.empty[Int]
 		val core = new EractorCore {
 			def body() = {
-				receive {
+				react {
 					case 99 =>
 						state ::=  99
 				}
-				receive {
+				react {
 					case 128 =>
 						state ::= 128
 				}
-				receive {
+				react {
 					case 99 =>
 						state ::= 88
 				}
@@ -100,7 +101,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 		var expired = false
 		val core = new EractorCore{
 			def body() = {
-				receive(5.seconds, {
+				react(5.seconds, {
 					case Expired => expired = true
 					case _ => expired = false
 				})
@@ -113,27 +114,62 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 		expired should be(right=true)
 	}
 
-	it should "recurse" in {
+	it should "recur" in {
 		val core = new EractorCore{
 			var state = ""
 			def body() = {
-				jump(body())
-//				receive[Unit]{
-//					case x:String if state.length < 10 =>
-//						state += x
-//						jump(body())
-//					case _ =>
-//						state += "!"
-//				}
+				val finished = react{
+					case x:String if state.length < 9 =>
+						state += x
+						false
+					case _ =>
+						state += "!"
+						true
+				}
+
+				if (!finished)
+					body()
+				else
+					shiftUnit
 			}
 		}
 
 		core.start should beReady
-		for (i <- 1 to 10){
+		for (i <- 1 to 9){
 			core.feed(i.toString) should beReady
 		}
 
+		core.feed("10") should not(beReady)
+
 		core.state should be("123456789!")
+	}
+
+	it should "use constant stack space when recurring" in {
+		val core = new EractorCore{
+			var state = 0L
+
+			def body = {
+
+				state -= 1
+
+				loop
+			}
+
+			def loop: Unit @eractorUnit = {
+				react {
+					case x:Int =>
+						state += x
+				}
+
+				body
+			}
+		}
+
+		core.start should beReady
+		for(i <- 1 to 1000000)
+			core.feed(i) should beReady
+
+		core.state should be(499999499999L)
 	}
 
 	private val beReady = Matcher{ (state:EractorState) =>

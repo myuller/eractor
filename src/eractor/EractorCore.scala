@@ -6,14 +6,15 @@ import akka.util.Timeout
 
 trait EractorCore {
 
-	def body() : Unit @cpsParam[EractorState, EractorState]
+	def body : Unit @eractorUnit
 
-	private val queue = mutable.Buffer.empty[Any]
+	protected val queue = mutable.Buffer.empty[Any]
+
 	private var state:EractorState = Finished
 
 	def start:EractorState = {
 		state = reset[EractorState, EractorState]{
-			body()
+			body
 			Finished
 		}
 
@@ -30,10 +31,10 @@ trait EractorCore {
 		}
 	}
 
-	protected def receive[T](extractor:PartialFunction[Any,T]): T @cpsParam[EractorState, EractorState] =
-		receive(Timeout.never, extractor)
+	protected def react[T](extractor:PartialFunction[Any,T]): T @cpsParam[EractorState, EractorState] =
+		react(Timeout.never, extractor)
 
-	protected def receive[T](timeout:Timeout, extractor:PartialFunction[Any, T]):T @cpsParam[EractorState, EractorState] = {
+	protected def react[T](timeout:Timeout, extractor:PartialFunction[Any, T]):T @cpsParam[EractorState, EractorState] = {
 		shift[T, EractorState, EractorState] { k:(T => EractorState) =>
 			// check queue for pending messages:
 			val pendingIndex = queue.indexWhere(extractor.isDefinedAt _)
@@ -56,8 +57,8 @@ trait EractorCore {
 		}
 	}
 
-	protected def jump(to: => Unit @cpsParam[EractorState, EractorState]) = shift[Unit, EractorState, EractorState]{ x:(Unit => EractorState) =>
-		x(())
+	def shiftUnit: Unit @eractorUnit = shift[Unit, EractorState, EractorState]{ k:( Unit => EractorState ) =>
+		k(())
 	}
 }
 
