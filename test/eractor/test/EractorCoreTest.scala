@@ -5,7 +5,6 @@ import org.scalatest.FlatSpec
 import eractor._
 import akka.util.duration._
 import akka.util.Timeout
-import util.continuations.cpsParam
 
 class EractorCoreTest extends FlatSpec with ShouldMatchers {
 	behavior of "EractorCore"
@@ -24,7 +23,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 		flag should be(right = true)
 	}
 
-	it should "be ready to receive messages if body contains \"receive\" functions" in {
+	it should "be ready to receive messages if body contains \"react\" functions" in {
 		new EractorCore {
 			def body() = {
 				react{ case _ => 0 }
@@ -56,7 +55,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 
 	it should "queue unmatching messages" in {
 		val core = new EractorCore {
-			def body() = {
+			def body = {
 				react {
 					case 99 =>
 						()
@@ -172,11 +171,29 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 		core.state should be(499999499999L)
 	}
 
+	it should "limit maximum amount of messages in queue" in {
+		val core = new EractorCore {
+			def body = {
+				val ref = Ref()
+				react{
+					case `ref` => ()
+				}
+			}
+
+			override protected val queueMaxSize = 2
+		}
+
+		core.start should beReady
+		core.feed(Ref()) should beReady
+		core.feed(Ref()) should beReady
+		evaluating{ core.feed(Ref()) } should produce[Exception]
+	}
+
 	private val beReady = Matcher{ (state:EractorState) =>
 		MatchResult(state != Finished, "was finished", "was not finished")
 	}
 
 	private def eractor(bBody: => Unit ) = new EractorCore{
-		def body() = { bBody }
+		def body = { bBody }
 	}
 }

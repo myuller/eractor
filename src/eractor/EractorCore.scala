@@ -6,9 +6,10 @@ import akka.util.Timeout
 
 trait EractorCore {
 
-	def body : Unit @eractorUnit
+	def body : Any @eractorUnit
 
-	protected val queue = mutable.Buffer.empty[Any]
+	private val queue = mutable.Buffer.empty[Any]
+	protected val queueMaxSize = 4096
 
 	private var state:EractorState = Finished
 
@@ -47,6 +48,8 @@ trait EractorCore {
 					if (extractor.isDefinedAt(message)) // execute body with received message
 						k(extractor(message))
 					else { // put message in queue and return same handler again
+						if (queue.length >= queueMaxSize)
+							sys error "queue size exceeded"
 						queue.prepend(message)
 						Ready(handler _, timeout)
 					}
