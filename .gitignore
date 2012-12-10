@@ -16,3 +16,6 @@ project/plugins/project/
 *.iml
 .idea
 lib
+
+# VIM
+*.swp
