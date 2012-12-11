@@ -25,9 +25,9 @@ class EractorCoreTest extends AkkaTest {
 		flag should be(right = true)
 	}
 
-	it should "be ready to receive messages if loop contains \"react\" functions" in {
+	it should "be ready to receive messages if body contains \"react\" functions" in {
 		new EractorCore {
-			def loop = {
+			def body = {
 				react{ case _ => 0 }
 				()
 			}
@@ -37,7 +37,7 @@ class EractorCoreTest extends AkkaTest {
 	it should "receive and process messages" in {
 		val core = new EractorCore {
 			var status = 1
-			def loop = {
+			def body = {
 				val q = react {
 					case x:Int => status = x
 						status + 19
@@ -57,7 +57,7 @@ class EractorCoreTest extends AkkaTest {
 
 	it should "queue unmatching messages" in {
 		val core = new EractorCore {
-			def loop = {
+			def body = {
 				react {
 					case 99 =>
 						()
@@ -73,7 +73,7 @@ class EractorCoreTest extends AkkaTest {
 	it should "unqueue messages previously unmatched after successfull match" in {
 		var state = List.empty[Int]
 		val core = new EractorCore {
-			def loop() = {
+			def body() = {
 				react {
 					case 99 =>
 						state ::=  99
@@ -101,7 +101,7 @@ class EractorCoreTest extends AkkaTest {
 	it should "time out" in {
 		var expired = false
 		val core = new EractorCore{
-			def loop() = {
+			def body() = {
 				react(5.seconds, {
 					case Expired => expired = true
 					case _ => expired = false
@@ -118,7 +118,7 @@ class EractorCoreTest extends AkkaTest {
 	it should "recur" in {
 		val core = new EractorCore{
 			var state = ""
-			def loop() = {
+			def body() = {
 				val finished = react{
 					case x:String if state.length < 9 =>
 						state += x
@@ -129,7 +129,7 @@ class EractorCoreTest extends AkkaTest {
 				}
 
 				if (!finished)
-					loop()
+					body()
 				else
 					shiftUnit
 			}
@@ -149,7 +149,7 @@ class EractorCoreTest extends AkkaTest {
 		val core = new EractorCore{
 			var state = 0L
 
-			def loop = {
+			def body = {
 
 				state -= 1
 
@@ -162,7 +162,7 @@ class EractorCoreTest extends AkkaTest {
 						state += x
 				}
 
-				loop
+				body
 			}
 		}
 
@@ -175,7 +175,7 @@ class EractorCoreTest extends AkkaTest {
 
 	it should "limit maximum amount of messages in queue" in {
 		val core = new EractorCore {
-			def loop = {
+			def body = {
 				val ref = Ref()
 				react{
 					case `ref` => ()
@@ -198,7 +198,7 @@ class EractorCoreTest extends AkkaTest {
 	private var snd:ActorRef = null
 
 	private def eractor(bBody: => Unit ) = new EractorCore{
-		def loop = { bBody }
+		def body = { bBody }
 	}
 
 	override protected def beforeAll() {

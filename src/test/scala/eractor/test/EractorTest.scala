@@ -2,7 +2,7 @@ package eractor.test
 
 import org.scalatest.matchers.ShouldMatchers
 import org.scalatest.{BeforeAndAfterAll, FlatSpec}
-import akka.testkit.TestActorRef
+import akka.testkit.{TestKit, TestActorRef}
 import akka.pattern._
 import akka.util.duration._
 import eractor.{EractorCore, Eractor}
@@ -11,7 +11,7 @@ import akka.dispatch.Await
 import akka.util.Timeout
 import akka.util
 
-class EractorTest extends AkkaTest {
+class EractorTest extends TestKit(ActorSystem("eractorTest")) with FlatSpec with ShouldMatchers {
 	behavior of "Eractor"
 
 	it should "terminate eractor without 'react'-s immediately" in {
@@ -20,7 +20,7 @@ class EractorTest extends AkkaTest {
 
 		val ref = TestActorRef(new Actor with Eractor {
 
-			def loop = {
+			def body = {
 				state = "ok!"
 			}
 		})
@@ -33,7 +33,7 @@ class EractorTest extends AkkaTest {
 		val ref = TestActorRef(new Actor with Eractor {
 			var state = 0
 
-			def loop = {
+			def body = {
 
 				react {
 					case msg: Int =>
@@ -41,7 +41,7 @@ class EractorTest extends AkkaTest {
 						sender ! state
 				}
 
-				loop
+				body
 			}
 		})
 
@@ -55,7 +55,7 @@ class EractorTest extends AkkaTest {
 
 	it should "introduce timeouts" in {
 		val ref = TestActorRef(new Actor with Eractor {
-			def loop = {
+			def body = {
 				var state = "no!"
 
 				// wait for anything after start and if there's nothing change state
@@ -82,7 +82,7 @@ class EractorTest extends AkkaTest {
 		val ref = TestActorRef(new Actor with Eractor {
 			var state = "no!"
 
-			def loop = {
+			def body = {
 				react(Timeout.zero, {
 					case Timeout =>
 						state = "ok!"
@@ -104,7 +104,7 @@ class EractorTest extends AkkaTest {
 
 		val ref = TestActorRef(new Actor with Eractor {
 
-			def loop = {
+			def body = {
 				react {
 					case 1 =>
 						capture1 = realSender
@@ -125,5 +125,92 @@ class EractorTest extends AkkaTest {
 		capture2 should be(sender2)
 	}
 
+	it should "perform complex interactions" in {
 
+		case class Verb(value:String)
+
+		var results = Set.empty[String]
+
+		val helper = system.actorOf(Props(new Actor with Eractor{
+			def body = {
+				react{
+					case "balloon" => realSender ! Verb("flies")
+					case "pencil" => realSender ! Verb("draws")
+					case "dog" => realSender ! Verb("barks")
+				}
+
+				body
+			}
+		}))
+
+		val constructor = system.actorOf(Props(new Actor with Eractor{
+			def body = {
+				val noun = react{
+					case str:String => str
+				}
+
+				helper ! noun
+
+				val verb = react(Timeout(200.milliseconds), {
+					case Verb(v) => v
+					case Timeout => "who knows..."
+				})
+
+				results += noun + " " + verb
+
+				body
+			}
+		}))
+
+		system.actorOf(Props(new Actor with Eractor {
+			def body = {
+				constructor ! "balloon"
+				constructor ! "banana"
+				constructor ! "dog"
+				constructor ! "pencil"
+			}
+
+			def sleep(timeout:Timeout) = {
+				react(timeout, {case Timeout => () })
+			}
+		}))
+
+		Thread.sleep(600)
+
+		assert(results.contains("banana who knows..."))
+		assert(results.contains("dog barks"))
+		assert(results.contains("pencil draws"))
+		assert(results.contains("balloon flies"))
+	}
+
+
+	it should "do ping pong example" in {
+		class PingPong extends Actor with Eractor {
+			var pings = 0
+			var pongs = 0
+
+			def body = {
+
+				react {
+					case 'ping =>
+						pings += 1
+						self ! 'pong
+				}
+
+				react {
+					case 'pong =>
+						pongs += 1
+				}
+
+				assert(pings == pongs)
+
+				body // loop forever
+			}
+		}
+
+		val pingPong = system.actorOf(Props(new PingPong))
+		(1 to 1000).foreach(_ => pingPong ! 'ping)
+	}
+
+	protected implicit val timeout = Timeout(5.seconds)
 }

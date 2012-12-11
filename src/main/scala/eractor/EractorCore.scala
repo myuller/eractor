@@ -7,7 +7,7 @@ import akka.actor.{Actor, ActorRef}
 
 trait EractorCore {
 
-	def loop : Any @eractorUnit
+	def body : Any @eractorUnit
 
 	private val queue = mutable.Buffer.empty[(ActorRef, Any)]
 	protected val queueMaxSize = 0
@@ -16,7 +16,7 @@ trait EractorCore {
 
 	def start:EractorState = {
 		state = reset[EractorState, EractorState]{
-			loop
+			body
 			Finished
 		}
 
@@ -37,10 +37,10 @@ trait EractorCore {
 		}
 	}
 
-	protected def react[T](extractor:PartialFunction[Any,T]): T @cpsParam[EractorState, EractorState] =
+	protected def react[T](extractor:PartialFunction[Any,T]): T @eractorUnit =
 		react(Timeout.never, extractor)
 
-	protected def react[T](timeout:Timeout, extractor:PartialFunction[Any, T]):T @cpsParam[EractorState, EractorState] = {
+	protected def react[T](timeout:Timeout, extractor:PartialFunction[Any, T]):T @eractorUnit = {
 		shift[T, EractorState, EractorState] { k:(T => EractorState) =>
 			// check queue for pending messages:
 			val pendingIndex = queue.indexWhere{ case(_, msg) => extractor.isDefinedAt(msg) }
@@ -52,7 +52,7 @@ trait EractorCore {
 			} else {
 				// construct and return future message handling function with current extractor if no matching message in queue found
 				def handler(message:Any, sender:ActorRef):EractorState = {
-					if (extractor.isDefinedAt(message)) // execute loop with received message
+					if (extractor.isDefinedAt(message)) // execute body with received message
 						captureSender(sender){
 							k(extractor(message))
 						}
