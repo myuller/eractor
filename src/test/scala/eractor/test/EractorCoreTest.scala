@@ -5,8 +5,10 @@ import org.scalatest.FlatSpec
 import eractor._
 import akka.util.duration._
 import akka.util.Timeout
+import akka.testkit.TestActorRef
+import akka.actor.{ActorRef, ActorSystem, Actor}
 
-class EractorCoreTest extends FlatSpec with ShouldMatchers {
+class EractorCoreTest extends AkkaTest {
 	behavior of "EractorCore"
 
 	it should "be finished when no receiving is intended" in {
@@ -25,7 +27,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 
 	it should "be ready to receive messages if loop contains \"react\" functions" in {
 		new EractorCore {
-			def loop() = {
+			def loop = {
 				react{ case _ => 0 }
 				()
 			}
@@ -35,7 +37,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 	it should "receive and process messages" in {
 		val core = new EractorCore {
 			var status = 1
-			def loop() = {
+			def loop = {
 				val q = react {
 					case x:Int => status = x
 						status + 19
@@ -47,9 +49,9 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 		}
 
 		core.start should beReady
-		core.feed(5) should beReady
+		core.feed(5, snd) should beReady
 		core.status should be(5)
-		core.feed(11) should not(beReady)
+		core.feed(11, snd) should not(beReady)
 		core.status should be((5+19) * 11)
 	}
 
@@ -64,8 +66,8 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 		}
 
 		core.start should beReady
-		core.feed(11) should beReady
-		core.feed(99) should not(beReady)
+		core.feed(11, snd) should beReady
+		core.feed(99, snd) should not(beReady)
 	}
 
 	it should "unqueue messages previously unmatched after successfull match" in {
@@ -88,11 +90,11 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 		}
 
 		core.start should beReady
-		core.feed(128) should beReady
+		core.feed(128, snd) should beReady
 		state should be(List.empty)
-		core.feed(99) should beReady
+		core.feed(99, snd) should beReady
 		state should be(List(128,99))
-		core.feed(99) should not(beReady)
+		core.feed(99, snd) should not(beReady)
 		state should be(List(88,128,99))
 	}
 
@@ -109,7 +111,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 
 		val state = core.start.asInstanceOf[Ready]
 		state.timeout should be(Timeout(5.seconds))
-		core.feed(Expired) should not(beReady)
+		core.feed(Expired, snd) should not(beReady)
 		expired should be(right=true)
 	}
 
@@ -135,10 +137,10 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 
 		core.start should beReady
 		for (i <- 1 to 9){
-			core.feed(i.toString) should beReady
+			core.feed(i.toString, snd) should beReady
 		}
 
-		core.feed("10") should not(beReady)
+		core.feed("10", snd) should not(beReady)
 
 		core.state should be("123456789!")
 	}
@@ -166,7 +168,7 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 
 		core.start should beReady
 		for(i <- 1 to 1000000)
-			core.feed(i) should beReady
+			core.feed(i, snd) should beReady
 
 		core.state should be(499999499999L)
 	}
@@ -184,16 +186,23 @@ class EractorCoreTest extends FlatSpec with ShouldMatchers {
 		}
 
 		core.start should beReady
-		core.feed(Ref()) should beReady
-		core.feed(Ref()) should beReady
-		evaluating{ core.feed(Ref()) } should produce[Exception]
+		core.feed(Ref(), snd) should beReady
+		core.feed(Ref(), snd) should beReady
+		evaluating{ core.feed(Ref(), snd) } should produce[Exception]
 	}
 
 	private val beReady = Matcher{ (state:EractorState) =>
 		MatchResult(state != Finished, "was finished", "was not finished")
 	}
 
+	private var snd:ActorRef = null
+
 	private def eractor(bBody: => Unit ) = new EractorCore{
 		def loop = { bBody }
+	}
+
+	override protected def beforeAll() {
+		super.beforeAll()
+		snd = TestActorRef(new Actor{ def receive = { case _ => sender ! "i'm fake!" } })
 	}
 }

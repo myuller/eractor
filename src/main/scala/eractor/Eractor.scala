@@ -17,10 +17,10 @@ trait Eractor extends EractorCore { this: Actor =>
 			// if timeoutHandle contains right reference we send Timeout message
 			// otherwise we ignore value
 			if (timeoutHandle.exists(_ == ref)) {
-				operateCore(feed(Timeout))
+				operateCore(feed(Timeout, sender))
 			}
 		case message =>
-			operateCore(feed(message))
+			operateCore(feed(message, sender))
 	}
 
 	@tailrec
@@ -33,7 +33,7 @@ trait Eractor extends EractorCore { this: Actor =>
 					case Timeout.never =>
 						timeoutHandle = None
 					case Timeout.zero =>
-						operateCore(feed(Timeout))
+						operateCore(feed(Timeout, sender))
 					case Timeout(duration) =>
 						val ref = Ref()
 						context.system.scheduler.scheduleOnce(duration, self, (Timeout, ref))
