@@ -39,3 +39,4 @@ TODO:
 
 * continuations control flow
 * realSender
+* enable plugin
