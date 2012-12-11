@@ -38,5 +38,6 @@ val pingPong = system.actorOf(Props(new PingPong))
 TODO:
 
 * continuations control flow
+* no nested shifts (reacts)
 * realSender
 * enable plugin
