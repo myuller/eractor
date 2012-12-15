@@ -191,6 +191,19 @@ class EractorCoreTest extends AkkaTest {
 		evaluating{ core.feed(Ref(), snd) } should produce[Exception]
 	}
 
+	it should "throw if extractor is not defined on \"Timeout\"" in {
+		val core = new EractorCore {
+			def body = {
+				react{
+					case 1 => 1
+				}
+			}
+		}
+
+		core.start should beReady
+		evaluating{ core.feed(Timeout, snd) } should produce[Exception]
+	}
+
 	private val beReady = Matcher{ (state:EractorState) =>
 		MatchResult(state != Finished, "was finished", "was not finished")
 	}
