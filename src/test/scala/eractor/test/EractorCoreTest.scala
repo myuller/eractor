@@ -173,6 +173,42 @@ class EractorCoreTest extends AkkaTest {
 		core.state should be(499999499999L)
 	}
 
+	it should "allow control flow to \"escape\" out of message pattern matching function" in {
+		val core = new EractorCore{
+			var state = List.empty[Int]
+
+			def body = {
+
+				state ::= 11
+
+				process
+			}
+
+			def process: Unit @eractorUnit = {
+				react {
+					case x:Int=>
+						if (x > 3)
+							escape(finish)
+						else
+							state ::= x
+				}
+
+				process
+			}
+
+			def finish = {
+				state ::= 23
+			}
+		}
+
+		core.start should beReady
+		for(i <- 1 to 3)
+			core.feed(i, snd) should beReady
+
+		core.feed(4, snd) should not(beReady)
+		core.state should be(List(23,3,2,1,11))
+	}
+
 	it should "limit maximum amount of messages in queue" in {
 		val core = new EractorCore {
 			def body = {

@@ -72,6 +72,40 @@ things to watch out for when using library:
     }
 ```
 
+but there's workaround for such cases involving use of special helper function __escape__.
+If result of this function call is returned from partial function,
+the "react" method will never return control to actor body, but instead function passed as
+"escape" argument will become new actor body. Example:
+
+```scala
+...
+var state = List.empty[Int]
+
+def body = {
+
+    state ::= 11
+
+    process
+}
+
+def process: Unit @eractorUnit = {
+    react {
+        case x:Int=>
+            if (x > 3)
+                escape(finish)
+            else
+                state ::= x
+    }
+
+    process
+}
+
+def finish = {
+    state ::= 23
+}
+...
+```
+
 * To use library in your code you will need to enable "delimited continuations"
   Scala compiler plugin
 

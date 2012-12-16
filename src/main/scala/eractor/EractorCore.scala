@@ -39,12 +39,21 @@ trait EractorCore {
 	* Initializes core. Returns core state after initialization
 	*/
 	def start:EractorState = {
-		state = reset[EractorState, EractorState]{
-			body
+		state = fireUp(body)
+		state
+	}
+
+	/**
+	 * Execute passed method inside delimited continuation and
+	 * return execution state
+	 * @param method method to execute
+	 * @return state produced by method
+	 */
+	private def fireUp(method: => Any @eractorUnit): EractorState = {
+		reset[EractorState, EractorState]{
+			method
 			Finished
 		}
-
-		state
 	}
 
 	/**
@@ -79,29 +88,36 @@ trait EractorCore {
 	/**
 	* Wait for message matching partial function passed as ''extractor'' indefinitely.
 	*/
-	protected def react[T](extractor:PartialFunction[Any,T]): T @eractorUnit =
+	protected def react[T](extractor:PartialFunction[Any,ReactControl[T]]): T @eractorUnit =
 		react(Timeout.never, extractor)
 
 	/**
 	* Wait for message matching partial function passed as ''extractor'' for time specified in
 	* ''timeout''.
 	*/
-	protected def react[T](timeout:Timeout, extractor:PartialFunction[Any, T]):T @eractorUnit = {
+	protected def react[T](timeout:Timeout, extractor:PartialFunction[Any, ReactControl[T]]):T @eractorUnit = {
+		def extract(sender: ActorRef, k: (T) => EractorState, message: Any): EractorState = {
+			captureSender(sender) {
+				extractor(message) match {
+					case Return(payload) => k(payload)
+					case Escape(location) =>
+						// pass the control flow to ''location'' function and never fire the continuation
+						fireUp(location())
+				}
+			}
+		}
+
 		shift[T, EractorState, EractorState] { k:(T => EractorState) =>
 			// check queue for pending messages:
 			val pendingIndex = queue.indexWhere{ case(_, msg) => extractor.isDefinedAt(msg) }
 			if (pendingIndex >= 0){
 				val (captSender, message) = queue.remove(pendingIndex)
-				captureSender(captSender){
-					k(extractor(message))
-				}
+				extract(captSender, k, message)
 			} else {
 				// construct and return future message handling function with current extractor if no matching message in queue found
 				def handler(message:Any, sender:ActorRef):EractorState = {
 					if (extractor.isDefinedAt(message)) // execute body with received message
-						captureSender(sender){
-							k(extractor(message))
-						}
+						extract(sender, k, message)
 					else { // put message in queue and return same handler again
 						if (message == Timeout)
 							sys error "extractor must be defined on \"Timeout\""
@@ -151,5 +167,16 @@ trait EractorCore {
 	def shiftUnit: Unit @eractorUnit = shift[Unit, EractorState, EractorState]{ k:( Unit => EractorState ) =>
 		k(())
 	}
+
+	/**
+	 * Wraps ordinary value returned by react into ReactControl instance
+	 */
+	protected implicit def reactReturn[T](value:T):ReactControl[T] = Return(value)
+
+	/**
+	 * Passes control to function ''location'' and never returns from continuation
+	 * @param location Function to pass control to
+	 */
+	protected def escape(location: => Any @eractorUnit):ReactControl[Nothing] = Escape(() => location)
 }
 
