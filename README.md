@@ -72,8 +72,8 @@ things to watch out for when using library:
     }
 ```
 
-but there's workaround for such cases involving use of special helper function __escape__.
-If result of this function call is returned from partial function,
+However there's a special helper function __escape__ which helps to deal with such limitations
+to some extent. If result of "escape" call is returned from partial function,
 the "react" method will never return control to actor body, but instead function passed as
 "escape" argument will become new actor body. Example:
 
